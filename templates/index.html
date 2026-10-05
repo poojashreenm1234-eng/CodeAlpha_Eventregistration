@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Event Registration System</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 700px; margin: 30px auto; padding: 0 20px; line-height: 1.5; }
+        .card { border: 1px solid #ccc; padding: 12px; margin-bottom: 12px; border-radius: 5px; }
+        input, button, select { padding: 8px; margin: 6px 0; width: 100%; box-sizing: border-box; }
+        button { background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .cancel-btn { background: #dc3545; }
+        .cancel-btn:hover { background: #a71d2a; }
+        #status { padding: 10px; margin: 10px 0; display: none; border-radius: 4px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h2>Available Events</h2>
+    <div id="eventsList"></div>
+
+    <hr>
+    <h2>Register for an Event</h2>
+    <div id="status"></div>
+    <form id="regForm">
+        <label>Select Event:</label>
+        <select id="eventSelect" required></select>
+        <input type="text" id="userName" placeholder="Your Name" required>
+        <input type="email" id="userEmail" placeholder="Your Email" required>
+        <button type="submit">Submit Registration</button>
+    </form>
+
+    <hr>
+    <h2>Manage My Registrations</h2>
+    <input type="email" id="lookupEmail" placeholder="Enter your email to view registrations">
+    <button type="button" onclick="findRegistrations()">Find Registrations</button>
+    <div id="myRegistrations"></div>
+
+    <script>
+        async function loadEvents() {
+            const res = await fetch('/api/events');
+            const data = await res.json();
+            const listDiv = document.getElementById('eventsList');
+            const select = document.getElementById('eventSelect');
+            listDiv.innerHTML = '';
+            select.innerHTML = '';
+
+            data.forEach(e => {
+                listDiv.innerHTML += `
+                    <div class="card">
+                        <h3>${e.title}</h3>
+                        <p>${e.description}</p>
+                        <p><strong>Date:</strong> ${e.date} | <strong>Location:</strong> ${e.location} | <strong>Capacity:</strong> ${e.capacity}</p>
+                    </div>
+                `;
+                select.innerHTML += `<option value="${e.id}">${e.title}</option>`;
+            });
+        }
+
+        document.getElementById('regForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const eventId = document.getElementById('eventSelect').value;
+            const res = await fetch(`/api/events/${eventId}/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_name: document.getElementById('userName').value,
+                    user_email: document.getElementById('userEmail').value
+                })
+            });
+            const data = await res.json();
+            const box = document.getElementById('status');
+            box.style.display = 'block';
+            if (res.ok) {
+                box.className = 'success';
+                box.innerText = data.message;
+                document.getElementById('regForm').reset();
+            } else {
+                box.className = 'error';
+                box.innerText = data.error;
+            }
+        });
+
+        async function findRegistrations() {
+            const email = document.getElementById('lookupEmail').value;
+            if (!email) return;
+            const res = await fetch(`/api/registrations?email=${encodeURIComponent(email)}`);
+            const data = await res.json();
+            const container = document.getElementById('myRegistrations');
+            container.innerHTML = '';
+
+            if (data.length === 0) {
+                container.innerHTML = '<p>No registrations found for this email.</p>';
+                return;
+            }
+
+            data.forEach(r => {
+                container.innerHTML += `
+                    <div class="card">
+                        <h4>${r.title}</h4>
+                        <p>Registered Name: ${r.user_name} | Location: ${r.location}</p>
+                        <button class="cancel-btn" onclick="cancelReg(${r.registration_id})">Cancel Registration</button>
+                    </div>
+                `;
+            });
+        }
+
+        async function cancelReg(id) {
+            if (!confirm('Are you sure you want to cancel this registration?')) return;
+            const res = await fetch(`/api/registrations/${id}`, { method: 'DELETE' });
+            const data = await res.json();
+            alert(data.message || data.error);
+            findRegistrations();
+        }
+
+        loadEvents();
+    </script>
+</body>
+</html>
